@@ -3,20 +3,41 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>DAN STREAM ULTRA</title>
+    <title>DAN STREAM ULTRA PRO</title>
     <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
     <style>
-        :root { --neon: #00d2ff; --bg: #0b1118; }
-        body { background: var(--bg); color: var(--neon); font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; text-align: center; margin: 0; padding: 20px; overflow-x: hidden; }
-        h1 { text-shadow: 0 0 10px var(--neon); letter-spacing: 2px; }
-        .video-container { position: relative; width: 100%; max-width: 800px; margin: 20px auto; border-radius: 15px; overflow: hidden; border: 3px solid var(--neon); box-shadow: 0 0 25px rgba(0,210,255,0.3); background: #000; aspect-ratio: 16/9; }
-        video { width: 100%; height: 100%; object-fit: cover; }
-        .btn { background: var(--neon); color: #000; border: none; padding: 15px 30px; border-radius: 50px; font-weight: bold; cursor: pointer; margin: 10px; font-size: 1rem; transition: 0.3s; text-transform: uppercase; }
-        .btn:hover { transform: scale(1.05); box-shadow: 0 0 15px var(--neon); }
-        .btn-stop { background: #ff4b2b; color: white; }
-        .status-pill { display: inline-block; padding: 8px 20px; border-radius: 20px; background: rgba(255,255,255,0.05); border: 1px solid #333; margin-bottom: 20px; font-family: monospace; }
-        #controls { margin-top: 20px; }
-        .log { font-size: 0.8rem; color: #666; margin-top: 10px; }
+        :root { --neon: #00d2ff; --bg: #0b1118; --red: #ff4b2b; --orange: #ff9d00; }
+        body { background: var(--bg); color: var(--neon); font-family: 'Segoe UI', sans-serif; text-align: center; margin: 0; padding: 10px; }
+        
+        /* Video Container Logic */
+        .video-container { 
+            position: relative; width: 100%; max-width: 900px; margin: 10px auto; 
+            border-radius: 12px; overflow: hidden; border: 2px solid var(--neon); 
+            background: #000; display: flex; align-items: center; justify-content: center;
+            transition: 0.3s ease;
+        }
+        
+        /* Orientation Helper Classes */
+        .landscape { aspect-ratio: 16 / 9; }
+        .portrait { aspect-ratio: 9 / 16; max-width: 400px; }
+
+        video { width: 100%; height: 100%; object-fit: cover; background: #000; }
+        
+        .btn-group { display: flex; flex-wrap: wrap; justify-content: center; gap: 10px; margin-top: 15px; }
+        .btn { 
+            background: var(--neon); color: #000; border: none; padding: 12px 20px; 
+            border-radius: 8px; font-weight: bold; cursor: pointer; font-size: 0.9rem; 
+            text-transform: uppercase; min-width: 130px;
+        }
+        .btn-mute-on { background: var(--red) !important; color: white; }
+        .btn-stop { background: #333; color: #ccc; }
+        
+        .status-pill { 
+            display: inline-block; padding: 6px 15px; border-radius: 20px; 
+            background: rgba(0,210,255,0.1); border: 1px solid var(--neon); 
+            margin: 10px 0; font-family: monospace;
+        }
+        .log { font-size: 0.75rem; color: #555; margin-top: 10px; }
     </style>
 </head>
 <body>
@@ -24,22 +45,22 @@
     <h1>DAN STREAM <span style="color:white">ULTRA</span></h1>
     
     <div id="setup-menu">
-        <p>Select your device role:</p>
-        <button class="btn" onclick="initApp('receiver')">💻 LAPTOP (PC)</button>
+        <button class="btn" onclick="initApp('receiver')">💻 PC (RECEIVER)</button>
         <button class="btn" onclick="initApp('sender')">📱 PHONE (CAMERA)</button>
     </div>
 
     <div id="main-app" style="display:none;">
         <div class="status-pill" id="status">INITIALIZING...</div>
         
-        <div class="video-container">
+        <div id="v-container" class="video-container landscape">
             <video id="v" autoplay playsinline muted></video>
         </div>
 
-        <div id="controls">
-            <button id="connect-btn" class="btn" style="display:none; background:#00ff00;" onclick="startCall()">🚀 START BROADCAST</button>
-            <br>
-            <button class="btn btn-stop" onclick="location.reload()">⏹️ RESET SYSTEM</button>
+        <div id="controls" class="btn-group">
+            <button id="connect-btn" class="btn" style="display:none; background:#00ff00;" onclick="startCall()">🚀 GO LIVE</button>
+            <button id="mute-btn" class="btn" style="display:none; background:#555;" onclick="toggleMute()">🎙️ MIC: ON</button>
+            <button id="orient-btn" class="btn" style="display:none; background:var(--orange);" onclick="toggleOrientation()">📱 PORTRAIT</button>
+            <button class="btn btn-stop" onclick="location.reload()">⏹️ RESET</button>
         </div>
         <div class="log" id="debug-log">System Log: Ready</div>
     </div>
@@ -47,87 +68,114 @@
     <script>
         let peer;
         let localStream;
-        // CHANGE THIS ID to something unique to you so others don't clash
-        const TARGET_ID = "dan-ultra-2026-secure"; 
+        let isMuted = false;
+        let isPortrait = false;
+        let currentCall = null;
+        const TARGET_ID = "dan-ultra-2026-secure"; // Change this if you have connection issues
 
         function log(msg) {
-            console.log(msg);
             document.getElementById('debug-log').innerText = "Log: " + msg;
         }
 
         async function initApp(role) {
             document.getElementById('setup-menu').style.display = 'none';
             document.getElementById('main-app').style.display = 'block';
-            const status = document.getElementById('status');
-
-            // 1. Setup Peer with reliable Google STUN servers
+            
+            // PC acts as the fixed Server, Phone gets random ID
             peer = (role === 'receiver') ? new Peer(TARGET_ID) : new Peer();
 
             peer.on('open', id => {
                 log("Peer ID: " + id);
                 if(role === 'receiver') {
-                    status.innerText = "WAITING FOR PHONE...";
-                    status.style.color = "#00ff00";
+                    document.getElementById('status').innerText = "WAITING FOR PHONE...";
                 } else {
-                    status.innerText = "PHONE READY";
+                    document.getElementById('status').innerText = "PHONE READY";
                     document.getElementById('connect-btn').style.display = 'inline-block';
+                    document.getElementById('mute-btn').style.display = 'inline-block';
+                    document.getElementById('orient-btn').style.display = 'inline-block';
                     setupCamera();
                 }
             });
 
-            // 2. PC SIDE: Handle the incoming call
+            // Receiver logic (PC Side)
             peer.on('call', call => {
-                log("Inbound call detected...");
-                call.answer(); // PC doesn't need to send its own camera
+                log("Receiving stream...");
+                call.answer();
                 call.on('stream', remoteStream => {
-                    log("Stream received!");
                     const video = document.getElementById('v');
                     video.srcObject = remoteStream;
-                    video.muted = false; // PC wants to hear the phone
+                    video.muted = false;
                     video.play();
-                    status.innerText = "🔴 LIVE - CONNECTED";
-                    status.style.background = "red";
-                    status.style.color = "white";
+                    document.getElementById('status').innerText = "🔴 LIVE CONNECTION ACTIVE";
+                    document.getElementById('status').style.borderColor = "red";
                 });
-            });
-
-            peer.on('error', err => {
-                log("Error: " + err.type);
-                if(err.type === 'unavailable-id') {
-                    alert("ID is currently in use. Please wait 10 seconds and try again.");
-                }
             });
         }
 
-        // 3. PHONE SIDE: Get Camera Access
+        // Camera Setup with Orientation handling
         async function setupCamera() {
+            const constraints = {
+                video: { 
+                    facingMode: "environment",
+                    width: isPortrait ? { ideal: 720 } : { ideal: 1280 },
+                    height: isPortrait ? { ideal: 1280 } : { ideal: 720 }
+                },
+                audio: true
+            };
+
             try {
-                localStream = await navigator.mediaDevices.getUserMedia({
-                    video: { 
-                        facingMode: "environment",
-                        width: { ideal: 1280 },
-                        height: { ideal: 720 }
-                    },
-                    audio: true
-                });
+                // Stop old tracks if they exist to free up camera
+                if (localStream) {
+                    localStream.getTracks().forEach(track => track.stop());
+                }
+                
+                localStream = await navigator.mediaDevices.getUserMedia(constraints);
                 document.getElementById('v').srcObject = localStream;
-                log("Camera active.");
+                
+                // Keep the mute state if we were already muted
+                localStream.getAudioTracks().forEach(t => t.enabled = !isMuted);
+                
+                log("Camera Set: " + (isPortrait ? "Portrait" : "Landscape"));
+                
+                // If we are currently in a call, we MUST restart it to update the PC side
+                if (currentCall) {
+                    startCall(); 
+                }
             } catch (e) {
                 log("Camera Error: " + e.message);
-                alert("Please enable camera permissions and ensure you are on HTTPS.");
             }
         }
 
-        // 4. PHONE SIDE: Start the Link
-        function startCall() {
-            if (!localStream) return alert("Camera not ready!");
-            log("Linking to PC...");
-            const call = peer.call(TARGET_ID, localStream);
+        function toggleOrientation() {
+            isPortrait = !isPortrait;
+            const container = document.getElementById('v-container');
+            const btn = document.getElementById('orient-btn');
             
-            call.on('error', e => {
-                log("Call failed: " + e);
-                alert("Could not find PC. Is the PC page open?");
-            });
+            if (isPortrait) {
+                container.classList.replace('landscape', 'portrait');
+                btn.innerText = "📺 LANDSCAPE";
+            } else {
+                container.classList.replace('portrait', 'landscape');
+                btn.innerText = "📱 PORTRAIT";
+            }
+            setupCamera();
+        }
+
+        function toggleMute() {
+            isMuted = !isMuted;
+            if (localStream) {
+                localStream.getAudioTracks().forEach(t => t.enabled = !isMuted);
+            }
+            const btn = document.getElementById('mute-btn');
+            btn.innerText = isMuted ? "🔇 MIC: OFF" : "🎙️ MIC: ON";
+            btn.className = isMuted ? "btn btn-mute-on" : "btn";
+        }
+
+        function startCall() {
+            if (!localStream) return alert("Wait for camera!");
+            log("Connecting to PC...");
+            currentCall = peer.call(TARGET_ID, localStream);
+            document.getElementById('status').innerText = "LINKED TO PC";
         }
     </script>
 </body>
