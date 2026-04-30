@@ -1,33 +1,108 @@
 <!DOCTYPE html>
 <html>
 <head>
-    <title>DAN CAMERA TEST</title>
+    <title>DAN STREAM FIXED</title>
+    <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
     <style>
-        body { background: black; color: white; text-align: center; font-family: sans-serif; }
-        video { width: 90%; border: 5px solid red; border-radius: 20px; margin-top: 20px; }
-        .msg { font-size: 1.2rem; color: yellow; margin: 20px; }
+        body { background: #0b0e14; color: #00d2ff; font-family: sans-serif; text-align: center; padding: 20px; margin: 0; }
+        .video-box { width: 100%; max-width: 640px; border: 4px solid #00d2ff; border-radius: 15px; background: black; margin-top: 10px; }
+        .btn { background: #00d2ff; color: #000; border: none; padding: 15px 25px; border-radius: 10px; font-weight: bold; cursor: pointer; margin: 10px; font-size: 1.1rem; transition: 0.3s; }
+        .btn:hover { background: #fff; transform: scale(1.05); }
+        .btn-mute { background: #ffb703; }
+        .btn-stop { background: #ff4b2b; color: white; }
+        .status-pill { display: inline-block; padding: 5px 15px; border-radius: 20px; background: #222; font-size: 0.9rem; margin-bottom: 10px; }
     </style>
 </head>
 <body>
-    <h1>CAMERA TEST</h1>
-    <div id="status" class="msg">Requesting Camera...</div>
-    <video id="testVideo" autoplay playsinline></video>
+    <h1>DAN STREAM PRO</h1>
+    
+    <div id="menu">
+        <button class="btn" onclick="initApp('sender')">PHONE (SENDER)</button>
+        <button class="btn" onclick="initApp('receiver')">PC (RECEIVER)</button>
+    </div>
+
+    <div id="app" style="display:none;">
+        <div class="status-pill" id="status">Connecting to DanStream...</div><br>
+        <video id="v" class="video-box" autoplay playsinline></video>
+        
+        <div id="sender-controls" style="display:none; margin-top:20px;">
+            <button class="btn" onclick="connectToPC()">🚀 LINK TO PC (dan1982)</button>
+            <br>
+            <button class="btn" id="mute-btn" onclick="toggleMute()">🎤 MIC ON</button>
+            <button class="btn btn-stop" onclick="location.reload()">⏹️ STOP</button>
+        </div>
+    </div>
 
     <script>
-        async function startTest() {
-            try {
-                const stream = await navigator.mediaDevices.getUserMedia({ 
-                    video: { facingMode: "environment" } 
+        let peer;
+        let localStream;
+        const FIXED_ID = "dan1982"; // Your custom fixed ID
+
+        async function initApp(mode) {
+            document.getElementById('menu').style.display = 'none';
+            document.getElementById('app').style.display = 'block';
+
+            if (mode === 'receiver') {
+                // PC Mode: Create the peer with the fixed ID
+                peer = new Peer(FIXED_ID, {
+                    config: {'iceServers': [{ 'urls': 'stun:stun.l.google.com:19302' }]}
                 });
-                document.getElementById('testVideo').srcObject = stream;
-                document.getElementById('status').innerText = "SUCCESS! Camera is working.";
-                document.getElementById('status').style.color = "lime";
-            } catch (err) {
-                document.getElementById('status').innerText = "ERROR: " + err.name;
-                console.error(err);
+                
+                peer.on('open', id => {
+                    document.getElementById('status').innerText = "PC READY: " + id;
+                    document.getElementById('status').style.color = "lime";
+                });
+
+                peer.on('call', call => {
+                    call.answer();
+                    call.on('stream', remoteStream => {
+                        document.getElementById('v').srcObject = remoteStream;
+                    });
+                });
+
+                peer.on('error', err => {
+                    if (err.type === 'unavailable-id') {
+                        alert("ID 'dan1982' is already in use! Close other tabs.");
+                    }
+                });
+
+            } else {
+                // Phone Mode: Just get a random ID and prepare to call dan1982
+                peer = new Peer({
+                    config: {'iceServers': [{ 'urls': 'stun:stun.l.google.com:19302' }]}
+                });
+                
+                document.getElementById('sender-controls').style.display = 'block';
+                document.getElementById('status').innerText = "PHONE READY";
+
+                try {
+                    localStream = await navigator.mediaDevices.getUserMedia({
+                        video: { facingMode: { ideal: "environment" }, width: 1280, height: 720 },
+                        audio: true
+                    });
+                    document.getElementById('v').srcObject = localStream;
+                } catch (e) {
+                    alert("Camera error. Please allow permissions.");
+                }
             }
         }
-        startTest();
+
+        function connectToPC() {
+            document.getElementById('status').innerText = "Linking to dan1982...";
+            const call = peer.call(FIXED_ID, localStream);
+            
+            if (!call) {
+                alert("Could not find dan1982. Is the PC app open?");
+            }
+        }
+
+        function toggleMute() {
+            const audioTrack = localStream.getAudioTracks()[0];
+            audioTrack.enabled = !audioTrack.enabled;
+            const btn = document.getElementById('mute-btn');
+            btn.innerText = audioTrack.enabled ? "🎤 MIC ON" : "🔇 MIC OFF";
+            btn.classList.toggle('btn-mute', !audioTrack.enabled);
+        }
     </script>
 </body>
 </html>
