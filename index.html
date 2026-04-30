@@ -3,66 +3,49 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>DAN STREAM ULTRA PRO</title>
+    <title>DAN STREAM ULTRA - REDMI EDITION</title>
     <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
     <style>
-        :root { --neon: #00d2ff; --bg: #0b1118; --red: #ff4b2b; --orange: #ff9d00; }
-        body { background: var(--bg); color: var(--neon); font-family: 'Segoe UI', sans-serif; text-align: center; margin: 0; padding: 10px; }
-        
-        /* Video Container Logic */
+        :root { --neon: #00d2ff; --bg: #0b1118; --red: #ff4b2b; }
+        body { background: var(--bg); color: var(--neon); font-family: sans-serif; text-align: center; margin: 0; padding: 10px; }
         .video-container { 
             position: relative; width: 100%; max-width: 900px; margin: 10px auto; 
             border-radius: 12px; overflow: hidden; border: 2px solid var(--neon); 
-            background: #000; display: flex; align-items: center; justify-content: center;
-            transition: 0.3s ease;
+            background: #000; aspect-ratio: 16/9; transition: 0.3s;
         }
-        
-        /* Orientation Helper Classes */
-        .landscape { aspect-ratio: 16 / 9; }
-        .portrait { aspect-ratio: 9 / 16; max-width: 400px; }
-
-        video { width: 100%; height: 100%; object-fit: cover; background: #000; }
-        
-        .btn-group { display: flex; flex-wrap: wrap; justify-content: center; gap: 10px; margin-top: 15px; }
+        .portrait { aspect-ratio: 9/16; max-width: 400px; }
+        video { width: 100%; height: 100%; object-fit: cover; }
+        .btn-group { display: flex; flex-wrap: wrap; justify-content: center; gap: 8px; }
         .btn { 
-            background: var(--neon); color: #000; border: none; padding: 12px 20px; 
-            border-radius: 8px; font-weight: bold; cursor: pointer; font-size: 0.9rem; 
-            text-transform: uppercase; min-width: 130px;
+            background: var(--neon); color: #000; border: none; padding: 15px; 
+            border-radius: 8px; font-weight: bold; cursor: pointer; flex: 1; min-width: 120px;
         }
-        .btn-mute-on { background: var(--red) !important; color: white; }
-        .btn-stop { background: #333; color: #ccc; }
-        
-        .status-pill { 
-            display: inline-block; padding: 6px 15px; border-radius: 20px; 
-            background: rgba(0,210,255,0.1); border: 1px solid var(--neon); 
-            margin: 10px 0; font-family: monospace;
-        }
-        .log { font-size: 0.75rem; color: #555; margin-top: 10px; }
+        .btn-mute { background: #555; color: white; }
+        .btn-active { background: var(--red) !important; }
+        .status { padding: 10px; margin-bottom: 10px; border: 1px solid #333; border-radius: 8px; font-size: 0.9rem; }
     </style>
 </head>
 <body>
 
-    <h1>DAN STREAM <span style="color:white">ULTRA</span></h1>
-    
     <div id="setup-menu">
-        <button class="btn" onclick="initApp('receiver')">💻 PC (RECEIVER)</button>
-        <button class="btn" onclick="initApp('sender')">📱 PHONE (CAMERA)</button>
+        <h2>SELECT ROLE</h2>
+        <button class="btn" onclick="initApp('receiver')">💻 OBS PC (RECEIVER)</button>
+        <button class="btn" onclick="initApp('sender')">📱 REDMI (SENDER)</button>
     </div>
 
     <div id="main-app" style="display:none;">
-        <div class="status-pill" id="status">INITIALIZING...</div>
+        <div class="status" id="status">INITIALIZING...</div>
         
-        <div id="v-container" class="video-container landscape">
+        <div id="v-container" class="video-container">
             <video id="v" autoplay playsinline muted></video>
         </div>
 
-        <div id="controls" class="btn-group">
-            <button id="connect-btn" class="btn" style="display:none; background:#00ff00;" onclick="startCall()">🚀 GO LIVE</button>
-            <button id="mute-btn" class="btn" style="display:none; background:#555;" onclick="toggleMute()">🎙️ MIC: ON</button>
-            <button id="orient-btn" class="btn" style="display:none; background:var(--orange);" onclick="toggleOrientation()">📱 PORTRAIT</button>
-            <button class="btn btn-stop" onclick="location.reload()">⏹️ RESET</button>
+        <div id="controls" class="btn-group" style="display:none;">
+            <button id="connect-btn" class="btn" style="background:#00ff00;" onclick="startCall()">🚀 GO LIVE</button>
+            <button id="mute-btn" class="btn btn-mute" onclick="toggleMute()">🎙️ MIC: ON</button>
+            <button id="orient-btn" class="btn" style="background:#ff9d00;" onclick="toggleOrientation()">📱 PORTRAIT</button>
+            <button class="btn" style="background:#333; color:white;" onclick="location.reload()">⏹️ RESET</button>
         </div>
-        <div class="log" id="debug-log">System Log: Ready</div>
     </div>
 
     <script>
@@ -70,112 +53,86 @@
         let localStream;
         let isMuted = false;
         let isPortrait = false;
-        let currentCall = null;
-        const TARGET_ID = "dan-ultra-2026-secure"; // Change this if you have connection issues
-
-        function log(msg) {
-            document.getElementById('debug-log').innerText = "Log: " + msg;
-        }
+        const TARGET_ID = "dan-ultra-redmi-2026"; 
 
         async function initApp(role) {
             document.getElementById('setup-menu').style.display = 'none';
             document.getElementById('main-app').style.display = 'block';
             
-            // PC acts as the fixed Server, Phone gets random ID
+            // Redmi works better with no custom ID on the sender side
             peer = (role === 'receiver') ? new Peer(TARGET_ID) : new Peer();
 
             peer.on('open', id => {
-                log("Peer ID: " + id);
-                if(role === 'receiver') {
-                    document.getElementById('status').innerText = "WAITING FOR PHONE...";
-                } else {
-                    document.getElementById('status').innerText = "PHONE READY";
-                    document.getElementById('connect-btn').style.display = 'inline-block';
-                    document.getElementById('mute-btn').style.display = 'inline-block';
-                    document.getElementById('orient-btn').style.display = 'inline-block';
-                    setupCamera();
+                document.getElementById('status').innerText = (role === 'receiver') ? "PC READY - OPEN ON PHONE" : "REDMI READY";
+                if(role === 'sender') {
+                    document.getElementById('controls').style.display = 'flex';
+                    setupRedmiCamera();
                 }
             });
 
-            // Receiver logic (PC Side)
             peer.on('call', call => {
-                log("Receiving stream...");
                 call.answer();
-                call.on('stream', remoteStream => {
+                call.on('stream', remote => {
                     const video = document.getElementById('v');
-                    video.srcObject = remoteStream;
+                    video.srcObject = remote;
                     video.muted = false;
                     video.play();
-                    document.getElementById('status').innerText = "🔴 LIVE CONNECTION ACTIVE";
-                    document.getElementById('status').style.borderColor = "red";
+                    document.getElementById('status').innerText = "🔴 LIVE IN OBS";
                 });
             });
         }
 
-        // Camera Setup with Orientation handling
-        async function setupCamera() {
+        async function setupRedmiCamera() {
+            // REDMI SPECIFIC: We define a range rather than "exact" to prevent driver crashes
             const constraints = {
-                video: { 
+                video: {
                     facingMode: "environment",
-                    width: isPortrait ? { ideal: 720 } : { ideal: 1280 },
-                    height: isPortrait ? { ideal: 1280 } : { ideal: 720 }
+                    width: isPortrait ? { min: 480, ideal: 720 } : { min: 640, ideal: 1280 },
+                    height: isPortrait ? { min: 640, ideal: 1280 } : { min: 480, ideal: 720 },
+                    frameRate: { ideal: 30 }
                 },
                 audio: true
             };
 
             try {
-                // Stop old tracks if they exist to free up camera
-                if (localStream) {
-                    localStream.getTracks().forEach(track => track.stop());
-                }
+                if (localStream) localStream.getTracks().forEach(t => t.stop());
                 
+                // Request stream
                 localStream = await navigator.mediaDevices.getUserMedia(constraints);
-                document.getElementById('v').srcObject = localStream;
                 
-                // Keep the mute state if we were already muted
-                localStream.getAudioTracks().forEach(t => t.enabled = !isMuted);
+                const v = document.getElementById('v');
+                v.srcObject = localStream;
                 
-                log("Camera Set: " + (isPortrait ? "Portrait" : "Landscape"));
+                // REDMI FORCE PLAY: MIUI often pauses video without this
+                v.load();
+                await v.play();
                 
-                // If we are currently in a call, we MUST restart it to update the PC side
-                if (currentCall) {
-                    startCall(); 
-                }
+                document.getElementById('status').innerText = "CAMERA ACTIVE";
             } catch (e) {
-                log("Camera Error: " + e.message);
+                console.error(e);
+                document.getElementById('status').innerText = "ERROR: Try Chrome Browser";
             }
         }
 
-        function toggleOrientation() {
-            isPortrait = !isPortrait;
-            const container = document.getElementById('v-container');
-            const btn = document.getElementById('orient-btn');
-            
-            if (isPortrait) {
-                container.classList.replace('landscape', 'portrait');
-                btn.innerText = "📺 LANDSCAPE";
-            } else {
-                container.classList.replace('portrait', 'landscape');
-                btn.innerText = "📱 PORTRAIT";
-            }
-            setupCamera();
+        function startCall() {
+            document.getElementById('status').innerText = "LINKING...";
+            const call = peer.call(TARGET_ID, localStream);
+            call.on('error', e => alert("PC not found! Check if PC is open first."));
         }
 
         function toggleMute() {
             isMuted = !isMuted;
-            if (localStream) {
-                localStream.getAudioTracks().forEach(t => t.enabled = !isMuted);
-            }
+            localStream.getAudioTracks().forEach(t => t.enabled = !isMuted);
             const btn = document.getElementById('mute-btn');
             btn.innerText = isMuted ? "🔇 MIC: OFF" : "🎙️ MIC: ON";
-            btn.className = isMuted ? "btn btn-mute-on" : "btn";
+            btn.classList.toggle('btn-active', isMuted);
         }
 
-        function startCall() {
-            if (!localStream) return alert("Wait for camera!");
-            log("Connecting to PC...");
-            currentCall = peer.call(TARGET_ID, localStream);
-            document.getElementById('status').innerText = "LINKED TO PC";
+        function toggleOrientation() {
+            isPortrait = !isPortrait;
+            document.getElementById('v-container').classList.toggle('portrait', isPortrait);
+            document.getElementById('orient-btn').innerText = isPortrait ? "📺 LANDSCAPE" : "📱 PORTRAIT";
+            setupRedmiCamera(); // Refresh camera for new aspect ratio
         }
     </script>
 </body>
