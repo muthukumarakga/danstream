@@ -1,104 +1,72 @@
-<!DOCTYPE html>
-<html>
-<head>
-    <title>DAN STREAM ULTRA</title>
-    <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
-    <style>
-        body { background: #0b1118; color: #00d2ff; font-family: 'Segoe UI', sans-serif; text-align: center; padding: 20px; }
-        .video-box { width: 100%; max-width: 640px; border: 4px solid #00d2ff; border-radius: 15px; background: #000; margin-top: 15px; box-shadow: 0 0 20px rgba(0,210,255,0.2); }
-        .btn { background: #00d2ff; color: #000; border: none; padding: 15px 30px; border-radius: 12px; font-weight: bold; cursor: pointer; margin: 10px; font-size: 1.1rem; }
-        .btn-stop { background: #ff4b2b; color: white; }
-        .status-pill { display: inline-block; padding: 10px 25px; border-radius: 30px; background: #1a222c; font-size: 1rem; border: 2px solid #333; margin-bottom: 15px; transition: 0.5s; }
-    </style>
-</head>
-<body>
-    <h1>DAN STREAM PRO</h1>
+let peer;
+let myStream;
+const RECEIVER_ID = "dan1982"; // The PC's fixed ID
+
+async function startApp(role) {
+    document.getElementById('menu').style.display = 'none';
+    document.getElementById('app').style.display = 'block';
     
-    <div id="menu">
-        <button class="btn" onclick="startApp('sender')">PHONE (SENDER)</button>
-        <button class="btn" onclick="startApp('receiver')">PC (RECEIVER)</button>
-    </div>
+    const peerOptions = {
+        debug: 2,
+        config: {'iceServers': [
+            { 'urls': 'stun:stun.l.google.com:19302' },
+            { 'urls': 'stun:stun1.l.google.com:19302' }
+        ]}
+    };
 
-    <div id="app" style="display:none;">
-        <div class="status-pill" id="status">Connecting to Server...</div><br>
-        <video id="v" class="video-box" autoplay playsinline muted></video>
-        
-        <div id="controls" style="display:none; margin-top:20px;">
-            <button class="btn" style="background:#00ff00;" onclick="connect()">🚀 LINK TO PC</button>
-            <br>
-            <button class="btn btn-stop" onclick="location.reload()">⏹️ RESET ALL</button>
-        </div>
-    </div>
+    // PC uses the fixed ID, Phone gets a random ID
+    peer = (role === 'receiver') ? new Peer(RECEIVER_ID, peerOptions) : new Peer(peerOptions);
 
-    <script>
-        let peer;
-        let myStream;
-        const MY_ID = "dan1982";
+    peer.on('open', id => {
+        const status = document.getElementById('status');
+        console.log("My peer ID is: " + id);
+        status.innerText = (role === 'receiver') ? "PC READY: Awaiting Phone..." : "PHONE READY";
+        status.style.color = "#00ff00";
+        if(role === 'sender') document.getElementById('controls').style.display = 'block';
+    });
 
-        async function startApp(role) {
-            document.getElementById('menu').style.display = 'none';
-            document.getElementById('app').style.display = 'block';
-            
-            // Step 1: Initialize Peer with specific "fallback" settings
-            const peerOptions = {
-                debug: 2,
-                config: {'iceServers': [
-                    { 'urls': 'stun:stun.l.google.com:19302' },
-                    { 'urls': 'stun:stun1.l.google.com:19302' }
-                ]}
-            };
-
-            peer = (role === 'receiver') ? new Peer(MY_ID, peerOptions) : new Peer(peerOptions);
-
-            // Step 2: Handle Server Connection
-            peer.on('open', id => {
-                const status = document.getElementById('status');
-                status.innerText = (role === 'receiver') ? "PC READY: Awaiting Phone" : "PHONE READY";
-                status.style.borderColor = "#00ff00";
-                status.style.color = "#00ff00";
-                if(role === 'sender') document.getElementById('controls').style.display = 'block';
+    // PHONE SIDE: Get Camera
+    if (role === 'sender') {
+        try {
+            myStream = await navigator.mediaDevices.getUserMedia({
+                video: { facingMode: "environment" },
+                audio: true
             });
-
-            // Step 3: Handle Incoming Calls (PC Side)
-            peer.on('call', call => {
-                call.answer();
-                call.on('stream', remote => {
-                    document.getElementById('v').srcObject = remote;
-                    document.getElementById('v').muted = false;
-                    document.getElementById('status').innerText = "LIVE CONNECTION ACTIVE";
-                });
-            });
-
-            // Step 4: Setup Camera (Phone Side)
-            if (role === 'sender') {
-                try {
-                    myStream = await navigator.mediaDevices.getUserMedia({
-                        video: { facingMode: { ideal: "environment" }, width: 1280, height: 720 },
-                        audio: true
-                    });
-                    document.getElementById('v').srcObject = myStream;
-                } catch (e) {
-                    document.getElementById('status').innerText = "Camera Error: Check Permissions";
-                }
-            }
-
-            // Error Handling
-            peer.on('error', err => {
-                console.error(err.type);
-                document.getElementById('status').style.borderColor = "red";
-                if (err.type === 'unavailable-id') {
-                    document.getElementById('status').innerText = "ID Taken. Retrying...";
-                    setTimeout(() => location.reload(), 2000);
-                } else {
-                    document.getElementById('status').innerText = "Network Busy. Click Reset.";
-                }
-            });
+            document.getElementById('v').srcObject = myStream;
+        } catch (e) {
+            alert("Camera access denied! Check HTTPS and Permissions.");
         }
+    }
 
-        function connect() {
-            document.getElementById('status').innerText = "Linking...";
-            peer.call(MY_ID, myStream);
-        }
-    </script>
-</body>
-</html>
+    // PC SIDE: Listen for the call
+    peer.on('call', call => {
+        console.log("Receiving call...");
+        call.answer(); // PC answers with nothing (or its own stream)
+        call.on('stream', remoteStream => {
+            const video = document.getElementById('v');
+            video.srcObject = remoteStream;
+            // Browsers often block auto-playing audio. We play it manually:
+            video.play(); 
+            document.getElementById('status').innerText = "LIVE: CONNECTED";
+        });
+    });
+
+    peer.on('error', err => {
+        console.error("PeerJS Error:", err.type);
+        document.getElementById('status').innerText = "Error: " + err.type;
+        document.getElementById('status').style.borderColor = "red";
+    });
+}
+
+function connect() {
+    if (!myStream) {
+        alert("No camera stream found!");
+        return;
+    }
+    document.getElementById('status').innerText = "Calling PC...";
+    const call = peer.call(RECEIVER_ID, myStream);
+    
+    call.on('error', err => {
+        alert("Link failed: " + err);
+    });
+}
