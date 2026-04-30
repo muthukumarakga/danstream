@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html>
 <head>
-    <title>DAN STREAM BACK-CAM</title>
+    <title>DAN STREAM MAIN-CAM</title>
     <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
     <style>
         body { background: #0b0e14; color: #00d2ff; font-family: sans-serif; text-align: center; padding: 20px; }
@@ -16,7 +16,7 @@
     <h1>DAN STREAM PRO</h1>
     
     <div id="menu">
-        <button class="btn" onclick="startSender()">START PHONE (BACK CAM)</button>
+        <button class="btn" onclick="startSender()">START PHONE (MAIN CAM)</button>
         <button class="btn" onclick="startReceiver()">START PC (RECEIVER)</button>
     </div>
 
@@ -46,19 +46,22 @@
             document.getElementById('display').style.display = 'block';
             document.getElementById('conn-ui').style.display = 'block';
             
+            const constraints = {
+                video: {
+                    facingMode: { ideal: "environment" },
+                    // Force a higher resolution to skip the Macro lens
+                    width: { min: 1280, ideal: 1920 },
+                    height: { min: 720, ideal: 1080 }
+                },
+                audio: true
+            };
+
             try {
-                // This line forces the Back Camera ("environment")
-                stream = await navigator.mediaDevices.getUserMedia({
-                    video: { facingMode: { exact: "environment" } }, 
-                    audio: true
-                });
+                stream = await navigator.mediaDevices.getUserMedia(constraints);
                 document.getElementById('v').srcObject = stream;
             } catch (err) {
-                // If "exact" back camera fails (rare), try general back camera
-                stream = await navigator.mediaDevices.getUserMedia({
-                    video: { facingMode: "environment" }, 
-                    audio: true
-                });
+                console.error("Main camera failed, trying basic back camera", err);
+                stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment" }, audio: true });
                 document.getElementById('v').srcObject = stream;
             }
         }
@@ -77,14 +80,14 @@
             const id = document.getElementById('pcID').value.trim();
             if(!id) return alert("Enter PC ID!");
             peer.call(id, stream);
-            alert("Linking...");
+            alert("Linking to PC...");
         }
 
         function toggleMute() {
             const audio = stream.getAudioTracks()[0];
             audio.enabled = !audio.enabled;
             const btn = document.getElementById('mBtn');
-            btn.innerText = audio.enabled ? "🎤 Mute" : "🔇 Unmuted";
+            btn.innerText = audio.enabled ? "🎤 Mute" : "🔇 Muted";
             btn.classList.toggle('btn-mute', !audio.enabled);
         }
 
