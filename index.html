@@ -3,26 +3,60 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>DAN STREAM ULTRA PRO</title>
+    <title>DAN STREAM ULTRA PRO - BORDERLESS</title>
     <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
     <style>
-        :root { --neon: #00d2ff; --bg: #0b1118; --red: #ff4b2b; --orange: #ff9d00; }
-        body { background: var(--bg); color: var(--neon); font-family: 'Segoe UI', sans-serif; text-align: center; margin: 0; padding: 10px; }
+        :root { --neon: #00d2ff; --bg: #000; --red: #ff4b2b; --orange: #ff9d00; }
         
-        /* Video Container Logic */
+        body { 
+            background: var(--bg); 
+            color: var(--neon); 
+            font-family: 'Segoe UI', sans-serif; 
+            text-align: center; 
+            margin: 0; 
+            padding: 0; 
+            overflow: hidden; 
+        }
+
+        /* Fullscreen Container Logic */
         .video-container { 
-            position: relative; width: 100%; max-width: 900px; margin: 10px auto; 
-            border-radius: 12px; overflow: hidden; border: 2px solid var(--neon); 
-            background: #000; display: flex; align-items: center; justify-content: center;
-            transition: 0.3s ease;
+            position: fixed;
+            top: 0; left: 0;
+            width: 100vw;
+            height: 100vh;
+            background: #000;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 1;
+            cursor: pointer;
+        }
+
+        video { 
+            width: 100%; 
+            height: 100%; 
+            /* 'contain' shows full image; 'cover' fills screen by cropping edges */
+            object-fit: contain; 
+            background: #000; 
+        }
+
+        /* UI Overlay Elements */
+        #ui-layer {
+            position: relative;
+            z-index: 10;
+            pointer-events: none;
+            padding: 20px;
         }
         
-        /* Orientation Helper Classes */
-        .landscape { aspect-ratio: 16 / 9; }
-        .portrait { aspect-ratio: 9 / 16; max-width: 400px; }
+        #ui-layer button, #ui-layer .status-pill {
+            pointer-events: auto;
+        }
 
-        video { width: 100%; height: 100%; object-fit: cover; background: #000; }
-        
+        /* "Streaming Mode" - Hides everything but the video */
+        .streaming #ui-layer, .streaming h1, .streaming .log {
+            display: none !important;
+        }
+
         .btn-group { display: flex; flex-wrap: wrap; justify-content: center; gap: 10px; margin-top: 15px; }
         .btn { 
             background: var(--neon); color: #000; border: none; padding: 12px 20px; 
@@ -37,33 +71,47 @@
             background: rgba(0,210,255,0.1); border: 1px solid var(--neon); 
             margin: 10px 0; font-family: monospace;
         }
-        .log { font-size: 0.75rem; color: #555; margin-top: 10px; }
+        .log { font-size: 0.75rem; color: #555; position: fixed; bottom: 10px; width: 100%; }
+
+        /* Mini indicator for when UI is hidden */
+        #live-indicator {
+            position: fixed; top: 10px; right: 10px; 
+            color: red; font-weight: bold; font-size: 12px;
+            z-index: 100; display: none;
+        }
+        .streaming #live-indicator { display: block; }
     </style>
 </head>
 <body>
 
-    <h1>DAN STREAM <span style="color:white">ULTRA</span></h1>
-    
-    <div id="setup-menu">
-        <button class="btn" onclick="initApp('receiver')">💻 PC (RECEIVER)</button>
-        <button class="btn" onclick="initApp('sender')">📱 PHONE (CAMERA)</button>
-    </div>
+    <div id="live-indicator">● LIVE</div>
 
-    <div id="main-app" style="display:none;">
-        <div class="status-pill" id="status">INITIALIZING...</div>
+    <div id="ui-layer">
+        <h1>DAN STREAM <span style="color:white">ULTRA</span></h1>
         
-        <div id="v-container" class="video-container landscape">
-            <video id="v" autoplay playsinline muted></video>
+        <div id="setup-menu">
+            <button class="btn" onclick="initApp('receiver')">💻 PC (RECEIVER)</button>
+            <button class="btn" onclick="initApp('sender')">📱 PHONE (CAMERA)</button>
         </div>
 
-        <div id="controls" class="btn-group">
-            <button id="connect-btn" class="btn" style="display:none; background:#00ff00;" onclick="startCall()">🚀 GO LIVE</button>
-            <button id="mute-btn" class="btn" style="display:none; background:#555;" onclick="toggleMute()">🎙️ MIC: ON</button>
-            <button id="orient-btn" class="btn" style="display:none; background:var(--orange);" onclick="toggleOrientation()">📱 PORTRAIT</button>
-            <button class="btn btn-stop" onclick="location.reload()">⏹️ RESET</button>
+        <div id="main-app" style="display:none;">
+            <div class="status-pill" id="status">INITIALIZING...</div>
+            
+            <div id="controls" class="btn-group">
+                <button id="connect-btn" class="btn" style="display:none; background:#00ff00;" onclick="startCall()">🚀 GO LIVE</button>
+                <button id="mute-btn" class="btn" style="display:none; background:#555;" onclick="toggleMute()">🎙️ MIC: ON</button>
+                <button id="orient-btn" class="btn" style="display:none; background:var(--orange);" onclick="toggleOrientation()">📱 PORTRAIT</button>
+                <button class="btn btn-stop" onclick="location.reload()">⏹️ RESET</button>
+            </div>
         </div>
-        <div class="log" id="debug-log">System Log: Ready</div>
     </div>
+
+    <!-- The actual video container -->
+    <div id="v-container" class="video-container" ondblclick="toggleFullscreen()">
+        <video id="v" autoplay playsinline muted></video>
+    </div>
+
+    <div class="log" id="debug-log">System Log: Ready</div>
 
     <script>
         let peer;
@@ -71,7 +119,7 @@
         let isMuted = false;
         let isPortrait = false;
         let currentCall = null;
-        const TARGET_ID = "dan-ultra-2026-secure"; // Change this if you have connection issues
+        const TARGET_ID = "dan-ultra-2026-secure";
 
         function log(msg) {
             document.getElementById('debug-log').innerText = "Log: " + msg;
@@ -81,7 +129,6 @@
             document.getElementById('setup-menu').style.display = 'none';
             document.getElementById('main-app').style.display = 'block';
             
-            // PC acts as the fixed Server, Phone gets random ID
             peer = (role === 'receiver') ? new Peer(TARGET_ID) : new Peer();
 
             peer.on('open', id => {
@@ -97,7 +144,7 @@
                 }
             });
 
-            // Receiver logic (PC Side)
+            // PC Receiver Logic
             peer.on('call', call => {
                 log("Receiving stream...");
                 call.answer();
@@ -106,13 +153,14 @@
                     video.srcObject = remoteStream;
                     video.muted = false;
                     video.play();
+                    
+                    // Automatically enter "Streaming Mode" (hides UI)
+                    document.body.classList.add('streaming');
                     document.getElementById('status').innerText = "🔴 LIVE CONNECTION ACTIVE";
-                    document.getElementById('status').style.borderColor = "red";
                 });
             });
         }
 
-        // Camera Setup with Orientation handling
         async function setupCamera() {
             const constraints = {
                 video: { 
@@ -124,40 +172,36 @@
             };
 
             try {
-                // Stop old tracks if they exist to free up camera
                 if (localStream) {
                     localStream.getTracks().forEach(track => track.stop());
                 }
-                
                 localStream = await navigator.mediaDevices.getUserMedia(constraints);
                 document.getElementById('v').srcObject = localStream;
-                
-                // Keep the mute state if we were already muted
                 localStream.getAudioTracks().forEach(t => t.enabled = !isMuted);
                 
-                log("Camera Set: " + (isPortrait ? "Portrait" : "Landscape"));
-                
-                // If we are currently in a call, we MUST restart it to update the PC side
-                if (currentCall) {
-                    startCall(); 
-                }
+                if (currentCall) startCall(); 
             } catch (e) {
                 log("Camera Error: " + e.message);
             }
         }
 
+        function toggleFullscreen() {
+            const container = document.getElementById('v-container');
+            if (!document.fullscreenElement) {
+                container.requestFullscreen().catch(err => {
+                    log(`Error: ${err.message}`);
+                });
+                document.body.classList.add('streaming');
+            } else {
+                document.exitFullscreen();
+                document.body.classList.remove('streaming');
+            }
+        }
+
         function toggleOrientation() {
             isPortrait = !isPortrait;
-            const container = document.getElementById('v-container');
             const btn = document.getElementById('orient-btn');
-            
-            if (isPortrait) {
-                container.classList.replace('landscape', 'portrait');
-                btn.innerText = "📺 LANDSCAPE";
-            } else {
-                container.classList.replace('portrait', 'landscape');
-                btn.innerText = "📱 PORTRAIT";
-            }
+            btn.innerText = isPortrait ? "📺 LANDSCAPE" : "📱 PORTRAIT";
             setupCamera();
         }
 
@@ -176,7 +220,16 @@
             log("Connecting to PC...");
             currentCall = peer.call(TARGET_ID, localStream);
             document.getElementById('status').innerText = "LINKED TO PC";
+            // Optional: Hide phone UI once call starts
+            // document.body.classList.add('streaming'); 
         }
+
+        // Listen for fullscreen changes (like pressing ESC) to show UI again
+        document.addEventListener('fullscreenchange', () => {
+            if (!document.fullscreenElement) {
+                document.body.classList.remove('streaming');
+            }
+        });
     </script>
 </body>
 </html>
