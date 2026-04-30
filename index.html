@@ -1,145 +1,95 @@
 <!DOCTYPE html>
 <html>
 <head>
-    <title>DAN STREAM PRO</title>
+    <title>DAN STREAM BACK-CAM</title>
     <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
     <style>
-        body { background: #0b0e14; color: #00d2ff; font-family: 'Arial', sans-serif; text-align: center; padding: 20px; margin: 0; }
-        .video-box { width: 95%; max-width: 640px; border: 4px solid #00d2ff; border-radius: 20px; box-shadow: 0 0 20px #00d2ff; background: black; margin-top: 10px; }
-        .btn { background: #00d2ff; color: #0b0e14; border: none; padding: 15px; border-radius: 50%; cursor: pointer; margin: 5px; transition: 0.3s; width: 55px; height: 55px; font-size: 1.4rem; display: inline-flex; align-items: center; justify-content: center; }
-        .btn:hover { transform: scale(1.1); background: #fff; }
+        body { background: #0b0e14; color: #00d2ff; font-family: sans-serif; text-align: center; padding: 20px; }
+        video { width: 90%; max-width: 600px; border: 4px solid #00d2ff; border-radius: 15px; background: black; }
+        .btn { background: #00d2ff; color: #000; border: none; padding: 15px 25px; border-radius: 10px; font-weight: bold; cursor: pointer; margin: 10px; font-size: 1.1rem; }
         .btn-stop { background: #ff4b2b; color: white; }
-        .btn-mute { background: #ffb703; color: #0b0e14; }
-        #my-id { font-size: 1.1rem; color: #fff; background: #222; padding: 5px 15px; border-radius: 5px; }
-        .controls-overlay { margin-top: 15px; display: flex; justify-content: center; flex-wrap: wrap; }
+        .btn-mute { background: #ffb703; }
+        #my-id { font-weight: bold; color: #fff; background: #222; padding: 10px; border-radius: 5px; display: inline-block; margin: 10px; }
     </style>
 </head>
 <body>
     <h1>DAN STREAM PRO</h1>
     
-    <div id="start-screen">
-        <button class="btn" style="border-radius:10px; width:auto; padding: 15px 30px;" onclick="initSender()">PHONE (SENDER)</button>
-        <button class="btn" style="border-radius:10px; width:auto; padding: 15px 30px;" onclick="initReceiver()">PC (RECEIVER)</button>
+    <div id="menu">
+        <button class="btn" onclick="startSender()">START PHONE (BACK CAM)</button>
+        <button class="btn" onclick="startReceiver()">START PC (RECEIVER)</button>
     </div>
 
-    <div id="main-app" style="display:none;">
-        <p>STATION ID: <span id="my-id">Generating...</span></p>
-        <video id="view" class="video-box" autoplay playsinline></video>
+    <div id="display" style="display:none;">
+        <p>STATION ID: <span id="my-id">...</span></p><br>
+        <video id="v" autoplay playsinline></video>
         
-        <div class="controls-overlay">
-            <button id="flip-btn" class="btn" onclick="toggleCamera()" title="Switch Camera">🔄</button>
-            
-            <button id="mic-btn" class="btn" onclick="toggleMic()" title="Mute Mic">🎤</button>
-            
-            <button id="stop-btn" class="btn btn-stop" onclick="stopStream()" title="Stop Sharing">⏹️</button>
+        <div id="controls" style="margin-top:20px;">
+            <button class="btn" id="mBtn" onclick="toggleMute()">🎤 Mute</button>
+            <button class="btn btn-stop" onclick="stopAll()">⏹️ Stop</button>
         </div>
 
-        <div id="sender-ui" style="display:none; margin-top:15px;">
-            <input type="text" id="target-id" placeholder="Enter PC ID" style="padding:12px; border-radius:8px; border:none; width: 180px; text-align: center; font-size: 1.1rem;">
-            <br><br>
-            <button class="btn" style="border-radius:10px; width:auto; padding: 10px 20px; font-size: 1.1rem;" onclick="connectToPC()">LINK TO PC</button>
+        <div id="conn-ui" style="display:none; margin-top: 20px;">
+            <input type="text" id="pcID" placeholder="Enter PC ID" style="padding:12px; border-radius:8px; width: 200px;">
+            <button class="btn" onclick="connect()">LINK TO PC</button>
         </div>
     </div>
 
     <script>
         const peer = new Peer();
-        let localStream;
-        let currentFacingMode = "user"; 
-        let isMuted = false;
+        let stream;
 
-        // When PeerJS connects to the server, it gives you an ID
-        peer.on('open', id => { 
-            document.getElementById('my-id').innerText = id; 
-        });
+        peer.on('open', id => document.getElementById('my-id').innerText = id);
 
-        // Function to grab the camera and microphone
-        async function getStream(mode) {
-            if (localStream) {
-                localStream.getTracks().forEach(track => track.stop());
-            }
+        async function startSender() {
+            document.getElementById('menu').style.display = 'none';
+            document.getElementById('display').style.display = 'block';
+            document.getElementById('conn-ui').style.display = 'block';
+            
             try {
-                localStream = await navigator.mediaDevices.getUserMedia({
-                    video: { facingMode: mode, width: 1280, height: 720 },
+                // This line forces the Back Camera ("environment")
+                stream = await navigator.mediaDevices.getUserMedia({
+                    video: { facingMode: { exact: "environment" } }, 
                     audio: true
                 });
-                document.getElementById('view').srcObject = localStream;
-                
-                // Remember mute state if switching cameras
-                localStream.getAudioTracks().forEach(track => track.enabled = !isMuted);
+                document.getElementById('v').srcObject = stream;
             } catch (err) {
-                alert("Camera error: Please make sure permissions are allowed.");
-            }
-        }
-
-        // START AS PHONE
-        async function initSender() {
-            document.getElementById('start-screen').style.display = 'none';
-            document.getElementById('main-app').style.display = 'block';
-            document.getElementById('sender-ui').style.display = 'block';
-            await getStream(currentFacingMode);
-        }
-
-        // TOGGLE CAMERA (FRONT/BACK)
-        async function toggleCamera() {
-            currentFacingMode = (currentFacingMode === "user") ? "environment" : "user";
-            await getStream(currentFacingMode);
-            alert("Camera switched! If you are already linked, click 'LINK TO PC' again to push the new camera view.");
-        }
-
-        // TOGGLE MICROPHONE (ON/OFF)
-        function toggleMic() {
-            if (localStream) {
-                isMuted = !isMuted;
-                localStream.getAudioTracks().forEach(track => {
-                    track.enabled = !isMuted;
+                // If "exact" back camera fails (rare), try general back camera
+                stream = await navigator.mediaDevices.getUserMedia({
+                    video: { facingMode: "environment" }, 
+                    audio: true
                 });
-                
-                const micBtn = document.getElementById('mic-btn');
-                micBtn.innerText = isMuted ? "🔇" : "🎤";
-                micBtn.classList.toggle('btn-mute', isMuted);
+                document.getElementById('v').srcObject = stream;
             }
         }
 
-        // STOP STREAM
-        function stopStream() {
-            if (localStream) {
-                localStream.getTracks().forEach(track => track.stop());
-            }
-            location.reload(); // Refresh the page to start completely over
-        }
-
-        // SEND VIDEO TO PC
-        function connectToPC() {
-            const pcID = document.getElementById('target-id').value.trim();
-            if (pcID === "") {
-                alert("Please enter the PC's STATION ID into the box first!");
-                return;
-            }
-            if (!localStream) {
-                alert("Waiting for camera to turn on...");
-                return;
-            }
-            // Send the call to the PC
-            peer.call(pcID, localStream);
-            alert("Sent! Look at your laptop screen.");
-        }
-
-        // START AS PC (OBS)
-        function initReceiver() {
-            document.getElementById('start-screen').style.display = 'none';
-            document.getElementById('main-app').style.display = 'block';
-            
-            // Hide the phone buttons since the PC just watches
-            document.getElementById('flip-btn').style.display = 'none';
-            document.getElementById('mic-btn').style.display = 'none';
-            
-            // Wait for the phone to call, then display the video
+        function startReceiver() {
+            document.getElementById('menu').style.display = 'none';
+            document.getElementById('display').style.display = 'block';
+            document.getElementById('controls').style.display = 'none';
             peer.on('call', call => {
-                call.answer(); 
-                call.on('stream', remoteStream => {
-                    document.getElementById('view').srcObject = remoteStream;
-                });
+                call.answer();
+                call.on('stream', rs => document.getElementById('v').srcObject = rs);
             });
+        }
+
+        function connect() {
+            const id = document.getElementById('pcID').value.trim();
+            if(!id) return alert("Enter PC ID!");
+            peer.call(id, stream);
+            alert("Linking...");
+        }
+
+        function toggleMute() {
+            const audio = stream.getAudioTracks()[0];
+            audio.enabled = !audio.enabled;
+            const btn = document.getElementById('mBtn');
+            btn.innerText = audio.enabled ? "🎤 Mute" : "🔇 Unmuted";
+            btn.classList.toggle('btn-mute', !audio.enabled);
+        }
+
+        function stopAll() {
+            location.reload();
         }
     </script>
 </body>
