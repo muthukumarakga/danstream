@@ -1,108 +1,103 @@
 <!DOCTYPE html>
 <html>
 <head>
-    <title>DAN STREAM PRO</title>
+    <title>DAN STREAM ULTRA</title>
     <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
     <style>
-        body { background: #0b0e14; color: #00d2ff; font-family: sans-serif; text-align: center; padding: 20px; margin: 0; }
-        .video-box { width: 100%; max-width: 640px; border: 4px solid #00d2ff; border-radius: 15px; background: black; margin-top: 10px; }
-        .btn { background: #00d2ff; color: #000; border: none; padding: 15px 25px; border-radius: 10px; font-weight: bold; cursor: pointer; margin: 10px; font-size: 1.1rem; }
+        body { background: #0b1118; color: #00d2ff; font-family: 'Segoe UI', sans-serif; text-align: center; padding: 20px; }
+        .video-box { width: 100%; max-width: 640px; border: 4px solid #00d2ff; border-radius: 15px; background: #000; margin-top: 15px; box-shadow: 0 0 20px rgba(0,210,255,0.2); }
+        .btn { background: #00d2ff; color: #000; border: none; padding: 15px 30px; border-radius: 12px; font-weight: bold; cursor: pointer; margin: 10px; font-size: 1.1rem; }
         .btn-stop { background: #ff4b2b; color: white; }
-        .status-pill { display: inline-block; padding: 8px 20px; border-radius: 20px; background: #222; font-size: 1rem; margin-bottom: 10px; border: 1px solid #444; }
+        .status-pill { display: inline-block; padding: 10px 25px; border-radius: 30px; background: #1a222c; font-size: 1rem; border: 2px solid #333; margin-bottom: 15px; transition: 0.5s; }
     </style>
 </head>
 <body>
     <h1>DAN STREAM PRO</h1>
     
     <div id="menu">
-        <button class="btn" onclick="initApp('sender')">PHONE (SENDER)</button>
-        <button class="btn" onclick="initApp('receiver')">PC (RECEIVER)</button>
+        <button class="btn" onclick="startApp('sender')">PHONE (SENDER)</button>
+        <button class="btn" onclick="startApp('receiver')">PC (RECEIVER)</button>
     </div>
 
     <div id="app" style="display:none;">
-        <div class="status-pill" id="status">Connecting...</div><br>
+        <div class="status-pill" id="status">Connecting to Server...</div><br>
         <video id="v" class="video-box" autoplay playsinline muted></video>
         
-        <div id="sender-controls" style="display:none; margin-top:20px;">
-            <button class="btn" style="background:#00ff00;" onclick="connectToPC()">🚀 LINK TO PC</button>
+        <div id="controls" style="display:none; margin-top:20px;">
+            <button class="btn" style="background:#00ff00;" onclick="connect()">🚀 LINK TO PC</button>
             <br>
-            <button id="mute-btn" class="btn" onclick="toggleMute()">🎤 MIC ON</button>
-            <button class="btn btn-stop" onclick="location.reload()">⏹️ RESET</button>
+            <button class="btn btn-stop" onclick="location.reload()">⏹️ RESET ALL</button>
         </div>
     </div>
 
     <script>
         let peer;
-        let localStream;
-        const FIXED_ID = "dan1982"; 
+        let myStream;
+        const MY_ID = "dan1982";
 
-        async function initApp(mode) {
+        async function startApp(role) {
             document.getElementById('menu').style.display = 'none';
             document.getElementById('app').style.display = 'block';
+            
+            // Step 1: Initialize Peer with specific "fallback" settings
+            const peerOptions = {
+                debug: 2,
+                config: {'iceServers': [
+                    { 'urls': 'stun:stun.l.google.com:19302' },
+                    { 'urls': 'stun:stun1.l.google.com:19302' }
+                ]}
+            };
 
-            if (mode === 'receiver') {
-                // PC Setup with automatic cleanup
-                if (peer) peer.destroy();
-                
-                peer = new Peer(FIXED_ID, {
-                    config: {'iceServers': [{ 'urls': 'stun:stun.l.google.com:19302' }]}
+            peer = (role === 'receiver') ? new Peer(MY_ID, peerOptions) : new Peer(peerOptions);
+
+            // Step 2: Handle Server Connection
+            peer.on('open', id => {
+                const status = document.getElementById('status');
+                status.innerText = (role === 'receiver') ? "PC READY: Awaiting Phone" : "PHONE READY";
+                status.style.borderColor = "#00ff00";
+                status.style.color = "#00ff00";
+                if(role === 'sender') document.getElementById('controls').style.display = 'block';
+            });
+
+            // Step 3: Handle Incoming Calls (PC Side)
+            peer.on('call', call => {
+                call.answer();
+                call.on('stream', remote => {
+                    document.getElementById('v').srcObject = remote;
+                    document.getElementById('v').muted = false;
+                    document.getElementById('status').innerText = "LIVE CONNECTION ACTIVE";
                 });
-                
-                peer.on('open', id => {
-                    document.getElementById('status').innerText = "PC READY: Waiting for Phone...";
-                    document.getElementById('status').style.color = "lime";
-                });
+            });
 
-                peer.on('call', call => {
-                    call.answer();
-                    call.on('stream', remoteStream => {
-                        const vid = document.getElementById('v');
-                        vid.srcObject = remoteStream;
-                        vid.muted = false;
-                        document.getElementById('status').innerText = "LIVE: Connected";
-                    });
-                });
-
-                peer.on('error', err => {
-                    console.log("Error type:", err.type);
-                    if (err.type === 'unavailable-id') {
-                        document.getElementById('status').innerText = "ID Busy. Retrying in 3s...";
-                        setTimeout(() => location.reload(), 3000);
-                    } else {
-                        document.getElementById('status').innerText = "Network Error. Please Refresh.";
-                    }
-                });
-
-            } else {
-                // Phone Setup
-                peer = new Peer(); 
-                document.getElementById('sender-controls').style.display = 'block';
-                document.getElementById('status').innerText = "PHONE READY";
-
+            // Step 4: Setup Camera (Phone Side)
+            if (role === 'sender') {
                 try {
-                    localStream = await navigator.mediaDevices.getUserMedia({
+                    myStream = await navigator.mediaDevices.getUserMedia({
                         video: { facingMode: { ideal: "environment" }, width: 1280, height: 720 },
                         audio: true
                     });
-                    document.getElementById('v').srcObject = localStream;
+                    document.getElementById('v').srcObject = myStream;
                 } catch (e) {
-                    alert("Camera error. Please allow permissions.");
+                    document.getElementById('status').innerText = "Camera Error: Check Permissions";
                 }
             }
+
+            // Error Handling
+            peer.on('error', err => {
+                console.error(err.type);
+                document.getElementById('status').style.borderColor = "red";
+                if (err.type === 'unavailable-id') {
+                    document.getElementById('status').innerText = "ID Taken. Retrying...";
+                    setTimeout(() => location.reload(), 2000);
+                } else {
+                    document.getElementById('status').innerText = "Network Busy. Click Reset.";
+                }
+            });
         }
 
-        function connectToPC() {
-            if (!localStream) return alert("Camera not ready!");
-            document.getElementById('status').innerText = "Linking to dan1982...";
-            peer.call(FIXED_ID, localStream);
-        }
-
-        function toggleMute() {
-            const audioTrack = localStream.getAudioTracks()[0];
-            audioTrack.enabled = !audioTrack.enabled;
-            const btn = document.getElementById('mute-btn');
-            btn.innerText = audioTrack.enabled ? "🎤 MIC ON" : "🔇 MIC OFF";
-            btn.style.background = audioTrack.enabled ? "#00d2ff" : "#ffb703";
+        function connect() {
+            document.getElementById('status').innerText = "Linking...";
+            peer.call(MY_ID, myStream);
         }
     </script>
 </body>
